@@ -33,10 +33,22 @@ class Config(BaseSettings):
     openai_api_base: str = Field(default="https://api.openai.com/v1", description="OpenAI API 基础地址")
     chat_model: str = Field(default="gpt-4.1-mini", description="对话模型名称")
 
+    langfuse_public_key: str = Field(default="", description="LangFuse 公钥")
+    langfuse_secret_key: str = Field(default="", description="LangFuse 私钥")
+    langfuse_base_url: str = Field(
+        default="https://cloud.langfuse.com",
+        description="LangFuse 服务地址",
+    )
+
     @property
     def langsmith_enabled(self) -> bool:
         """LangSmith 是否已启用（需同时配置 API Key 且开启追踪）。"""
         return bool(self.langsmith_api_key) and self.langchain_tracing_v2
+
+    @property
+    def langfuse_enabled(self) -> bool:
+        """LangFuse 是否已启用（需同时配置公钥与私钥）。"""
+        return bool(self.langfuse_public_key) and bool(self.langfuse_secret_key)
 
 
 # 全局配置实例

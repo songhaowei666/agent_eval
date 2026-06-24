@@ -22,16 +22,20 @@ LangFuse 配置：
 3. 顶层（深思熟虑）：进行复杂的投资分析和长期财务规划
 """
 
-import os
+import sys
 import json
 import logging
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 import dashscope
 from qwen_agent.agents import Assistant
 from qwen_agent.gui import WebUI
 from qwen_agent.tools.base import BaseTool, register_tool
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import config as settings
 
 # ====== LangFuse 导入和初始化 ======
 
@@ -53,9 +57,9 @@ if HAS_LANGFUSE:
     otel_logger = logging.getLogger("opentelemetry")
     otel_logger.setLevel(logging.CRITICAL)  # 只显示严重错误
     
-    langfuse_secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-    langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
-    langfuse_base_url = os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+    langfuse_secret_key = settings.langfuse_secret_key
+    langfuse_public_key = settings.langfuse_public_key
+    langfuse_base_url = settings.langfuse_base_url
     
     if langfuse_secret_key and langfuse_public_key:
         try:
@@ -82,9 +86,13 @@ if HAS_LANGFUSE:
         print("        - LANGFUSE_SECRET_KEY")
 
 # 设置API密钥
-DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+DASHSCOPE_API_KEY = settings.dashscope_api_key
 dashscope.api_key = DASHSCOPE_API_KEY
 dashscope.timeout = 30
+
+# qwen3.7-plus 等新模型需走 OpenAI 兼容接口，不能用 dashscope.Generation.call
+LLM_MODEL = 'qwen3.7-plus'
+DASHSCOPE_COMPAT_BASE = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
 # 示例客户画像数据
 SAMPLE_CUSTOMER_PROFILES = {
@@ -277,8 +285,8 @@ class TracedAssistant(Assistant):
                                 print(f"[DEBUG] 准备设置 input: {input_value[:100]}")
                                 langfuse.update_current_span(
                                     input=input_value,
-                                    model="qwen-turbo-latest",
                                     metadata={
+                                        "model": LLM_MODEL,
                                         "customer_id": self.customer_id,
                                         "risk_tolerance": self.customer_profile.get("risk_tolerance", "unknown"),
                                         "investment_horizon": self.customer_profile.get("investment_horizon", "unknown"),
@@ -409,7 +417,9 @@ def init_wealth_advisor_agent(customer_profile: Dict[str, Any],
                               enable_tracing: bool = True) -> Assistant:
     """初始化财富顾问智能体"""
     llm_cfg = {
-        'model': 'qwen-turbo-latest',
+        'model': LLM_MODEL,
+        'model_server': DASHSCOPE_COMPAT_BASE,
+        'api_key': DASHSCOPE_API_KEY,
         'timeout': 30,
         'retry_count': 3,
     }
@@ -503,7 +513,7 @@ def run_wealth_advisor(user_query: str, customer_id: str = "customer1") -> Dict[
                         if langfuse:
                             langfuse.update_current_span(
                                 metadata={
-                                    "model": "qwen-turbo-latest",
+                                    "model": LLM_MODEL,
                                     "customer_id": customer_id,
                                     "risk_tolerance": customer_profile.get("risk_tolerance", "unknown"),
                                     "investment_horizon": customer_profile.get("investment_horizon", "unknown"),
@@ -595,7 +605,7 @@ def _flush_langfuse():
 
 if __name__ == "__main__":
     print("=== 混合智能体 - 财富管理投顾AI助手 ===\n")
-    print("使用模型：Qwen-Turbo-Latest")
+    print(f"使用模型：{LLM_MODEL}")
     print("框架：qwen-agent")
     if langfuse_client:
         print("监测：LangFuse 已启用\n")
